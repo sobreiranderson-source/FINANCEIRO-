@@ -99,7 +99,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
 
 // --- AUTH TYPES ---
 
-export type UserRole = 'ADMIN' | 'USER';
+export type UserRole = 'ADMIN' | 'USER' | 'admin' | 'user';
 export type UserStatus = 'active' | 'inactive';
 
 export interface User {

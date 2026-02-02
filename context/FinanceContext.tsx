@@ -2,9 +2,9 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import {
   AppState, Transaction, Category, CreditCard, RecurringExpense, FinancialGoal, Investment, InstallmentPurchase
 } from '../types';
-import { loadState, saveState, INITIAL_STATE } from '../services/storage';
 import { checkRecurringExpenses, checkInstallments, getMonthKey, generateUUID } from '../services/financeUtils';
 import { useAuth } from './AuthContext';
+import * as api from '../services/api';
 
 interface FinanceContextType extends AppState {
   addTransaction: (t: Omit<Transaction, 'id'>) => void;
@@ -16,6 +16,7 @@ interface FinanceContextType extends AppState {
   deleteCategory: (id: string) => void;
 
   addCard: (c: Omit<CreditCard, 'id'>) => void;
+  updateCard: (c: CreditCard) => void;
   deleteCard: (id: string) => void;
 
   addRecurring: (r: Omit<RecurringExpense, 'id' | 'lastGeneratedMonth'>) => void;
@@ -42,30 +43,52 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
 export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
   const { user } = useAuth();
-  const [state, setState] = useState<AppState>(INITIAL_STATE);
 
-  // Load state when User changes
+  // Initial empty state
+  const [state, setState] = useState<AppState>({
+    balanceOffset: 0,
+    transactions: [],
+    categories: [],
+    cards: [],
+    recurringExpenses: [],
+    installments: [],
+    goals: [],
+    investments: [],
+    darkMode: false
+  });
+
+  // Load state from Supabase when User changes
   useEffect(() => {
     if (user) {
-      const loaded = loadState(user.id);
-      setState(loaded);
+      api.fetchInitialState(user.id).then(loaded => {
+        setState(loaded);
+        if (loaded.darkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      });
     } else {
-      setState(INITIAL_STATE);
+      // Reset if no user
+      setState({
+        balanceOffset: 0,
+        transactions: [],
+        categories: [],
+        cards: [],
+        recurringExpenses: [],
+        installments: [],
+        goals: [],
+        investments: [],
+        darkMode: false
+      });
     }
   }, [user]);
 
-  // Persistence Effect
+  // Handle Dark Mode
   useEffect(() => {
-    if (user) {
-      saveState(state, user.id);
-    }
-
     if (state.darkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [state, user]);
+  }, [state.darkMode]);
 
   // Recurring Checker Effect
   useEffect(() => {
@@ -80,6 +103,9 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
             r.id === id ? { ...r, lastGeneratedMonth: month } : r
           )
         }));
+        // Note: We don't save 'lastGeneratedMonth' to DB explicitly in this simplified version
+        // unless we map it. Typically recurring generation is client-side automation.
+        // Ideally, we should trust the generated transactions in DB.
       }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -88,8 +114,6 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
   // Installments Checker Effect
   useEffect(() => {
     if (!user) return;
-    // Must use a function reference that doesn't trigger loops
-    // We pass the current state of transactions for the check
     if (state.installments.length > 0) {
       checkInstallments(
         state.installments,
@@ -101,11 +125,13 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.installments, state.transactions.length, user]);
 
+  // --- Transactions ---
+
   const addTransaction = (t: Omit<Transaction, 'id'>) => {
+    if (!user) return;
     const newTx = { ...t, id: generateUUID() };
+
     setState(prev => {
-      // Logic: If linked to a goal, update goal progress automatically
-      // But user can override this via updateGoal manual functionality
       let newGoals = prev.goals;
       if (t.goalId && t.type === 'income') {
         newGoals = prev.goals.map(g =>
@@ -118,24 +144,39 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
         goals: newGoals
       };
     });
+
+    api.apiAddTransaction(newTx, user.id).catch(console.error);
+
+    // Update Goal in DB if needed
+    if (t.goalId && t.type === 'income') {
+      const goal = state.goals.find(g => g.id === t.goalId);
+      if (goal) {
+        api.apiUpdateGoal({ ...goal, currentAmount: goal.currentAmount + t.amount }).catch(console.error);
+      }
+    }
   };
 
   const updateTransaction = (t: Transaction) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       transactions: prev.transactions.map(tx => tx.id === t.id ? t : tx)
     }));
+    api.apiUpdateTransaction(t, user.id).catch(console.error);
   };
 
   const deleteTransaction = (id: string) => {
+    if (!user) return;
     setState(prev => {
-      // Reverse goal impact if needed
       const tx = prev.transactions.find(t => t.id === id);
       let newGoals = prev.goals;
       if (tx && tx.goalId && tx.type === 'income') {
         newGoals = prev.goals.map(g =>
           g.id === tx.goalId ? { ...g, currentAmount: g.currentAmount - tx.amount } : g
         );
+        // DB Update Reversed
+        const goal = newGoals.find(g => g.id === tx.goalId);
+        if (goal) api.apiUpdateGoal(goal).catch(console.error);
       }
       return {
         ...prev,
@@ -143,23 +184,32 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
         goals: newGoals
       };
     });
+    api.apiDeleteTransaction(id).catch(console.error);
   };
 
+  // --- Categories ---
+
   const addCategory = (c: Omit<Category, 'id'>) => {
+    if (!user) return;
+    const newCat = { ...c, id: generateUUID() };
     setState(prev => ({
       ...prev,
-      categories: [...prev.categories, { ...c, id: generateUUID() }]
+      categories: [...prev.categories, newCat]
     }));
+    api.apiAddCategory(newCat, user.id).catch(console.error);
   };
 
   const updateCategory = (c: Category) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       categories: prev.categories.map(cat => cat.id === c.id ? c : cat)
     }));
+    api.apiUpdateCategory(c).catch(console.error);
   };
 
   const deleteCategory = (id: string) => {
+    if (!user) return;
     if (state.transactions.some(t => t.categoryId === id) || state.recurringExpenses.some(r => r.categoryId === id)) {
       console.warn('Cannot delete category in use');
       return;
@@ -168,68 +218,108 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
       ...prev,
       categories: prev.categories.filter(c => c.id !== id)
     }));
+    api.apiDeleteCategory(id).catch(console.error);
   };
 
+  // --- Cards ---
+
   const addCard = (c: Omit<CreditCard, 'id'>) => {
+    if (!user) return;
+    const newCard = { ...c, id: generateUUID() };
     setState(prev => ({
       ...prev,
-      cards: [...prev.cards, { ...c, id: generateUUID() }]
+      cards: [...prev.cards, newCard]
     }));
+    api.apiAddCard(newCard, user.id).catch(console.error);
   };
 
   const deleteCard = (id: string) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       cards: prev.cards.filter(c => c.id !== id),
       transactions: prev.transactions.map(t => t.cardId === id ? { ...t, cardId: undefined } : t)
     }));
+    api.apiDeleteCard(id).catch(console.error);
   };
 
-  const addRecurring = (r: Omit<RecurringExpense, 'id' | 'lastGeneratedMonth'>) => {
+  const updateCard = (c: CreditCard) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
-      recurringExpenses: [...prev.recurringExpenses, {
-        ...r,
-        id: generateUUID(),
-        lastGeneratedMonth: '' // Will trigger on next check if date matches
-      }]
+      cards: prev.cards.map(card => card.id === c.id ? c : card)
     }));
+    api.apiUpdateCard(c).catch(console.error);
+  };
+
+  // --- Recurring ---
+
+  const addRecurring = (r: Omit<RecurringExpense, 'id' | 'lastGeneratedMonth'>) => {
+    if (!user) return;
+    const newRec = {
+      ...r,
+      id: generateUUID(),
+      lastGeneratedMonth: ''
+    };
+    setState(prev => ({
+      ...prev,
+      recurringExpenses: [...prev.recurringExpenses, newRec]
+    }));
+    api.apiAddRecurring(newRec, user.id).catch(console.error);
   };
 
   const deleteRecurring = (id: string) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       recurringExpenses: prev.recurringExpenses.filter(r => r.id !== id)
     }));
+    api.apiDeleteRecurring(id).catch(console.error);
   };
 
+  // --- Installments ---
+
   const addInstallment = (i: Omit<InstallmentPurchase, 'id' | 'lastGeneratedMonth' | 'status'>) => {
+    if (!user) return;
+    const newInst: InstallmentPurchase = {
+      ...i,
+      id: generateUUID(),
+      status: 'active',
+      lastGeneratedMonth: ''
+    };
     setState(prev => ({
       ...prev,
-      installments: [...prev.installments, {
-        ...i,
-        id: generateUUID(),
-        status: 'active',
-        lastGeneratedMonth: '' // Will trigger on check
-      }]
+      installments: [...prev.installments, newInst]
     }));
+    api.apiAddInstallment(newInst, user.id).catch(console.error);
   };
 
   const updateInstallment = (i: InstallmentPurchase) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       installments: prev.installments.map(inst => inst.id === i.id ? i : inst)
     }));
+    if (i.status === 'completed' || i.status === 'cancelled') {
+      api.apiUpdateInstallmentStatus(i.id, i.status).catch(console.error);
+    }
   };
 
   const deleteInstallment = (id: string, deleteTransactions: boolean) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       installments: prev.installments.filter(i => i.id !== id),
       transactions: deleteTransactions
         ? prev.transactions.filter(t => t.installmentId !== id)
-        : prev.transactions.map(t => t.installmentId === id ? { ...t, installmentId: undefined } : t) // unlink if keeping
+        : prev.transactions.map(t => t.installmentId === id ? { ...t, installmentId: undefined } : t)
     }));
+    api.apiDeleteInstallment(id).catch(console.error);
+    if (deleteTransactions) {
+      state.transactions.filter(t => t.installmentId === id).forEach(t => {
+        api.apiDeleteTransaction(t.id).catch(console.error);
+      });
+    }
   };
 
   const payNextInstallment = (id: string) => {
@@ -238,9 +328,7 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
       if (!inst) return prev;
 
       const paidCount = prev.transactions.filter(t => t.installmentId === id).length;
-      if (paidCount >= inst.totalInstallments) {
-        return prev; // Already paid
-      }
+      if (paidCount >= inst.totalInstallments) return prev;
 
       const nextNumber = paidCount + 1;
       const today = new Date();
@@ -259,13 +347,20 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
 
       const newStatus = nextNumber >= inst.totalInstallments ? 'completed' : 'active';
 
+      if (user) {
+        api.apiAddTransaction(newTx, user.id).catch(console.error);
+        if (newStatus !== inst.status) {
+          api.apiUpdateInstallmentStatus(inst.id, newStatus).catch(console.error);
+        }
+      }
+
       return {
         ...prev,
         transactions: [newTx, ...prev.transactions],
         installments: prev.installments.map(i => i.id === id ? {
           ...i,
           status: newStatus,
-          lastGeneratedMonth: currentMonthKey // Update to prevent auto-gen in same month
+          lastGeneratedMonth: currentMonthKey
         } : i)
       };
     });
@@ -281,8 +376,14 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       if (relatedTransactions.length === 0) return prev;
-
       const lastTx = relatedTransactions[0];
+
+      if (user) {
+        api.apiDeleteTransaction(lastTx.id).catch(console.error);
+        if (inst.status === 'completed') {
+          api.apiUpdateInstallmentStatus(inst.id, 'active').catch(console.error);
+        }
+      }
 
       return {
         ...prev,
@@ -292,47 +393,75 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
     });
   };
 
+  // --- Goals ---
+
   const addGoal = (g: Omit<FinancialGoal, 'id'>) => {
+    if (!user) return;
+    const newGoal = { ...g, id: generateUUID() };
     setState(prev => ({
       ...prev,
-      goals: [...prev.goals, { ...g, id: generateUUID() }]
+      goals: [...prev.goals, newGoal]
     }));
+    api.apiAddGoal(newGoal, user.id).catch(console.error);
   };
 
   const updateGoal = (g: FinancialGoal) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       goals: prev.goals.map(goal => goal.id === g.id ? g : goal)
     }));
+    api.apiUpdateGoal(g).catch(console.error);
   };
 
   const deleteGoal = (id: string) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       goals: prev.goals.filter(g => g.id !== id)
     }));
+    api.apiDeleteGoal(id).catch(console.error);
   };
 
+  // --- Investments ---
+
   const addInvestment = (i: Omit<Investment, 'id'>) => {
+    if (!user) return;
+    const newInv = { ...i, id: generateUUID() };
     setState(prev => ({
       ...prev,
-      investments: [...prev.investments, { ...i, id: generateUUID() }]
+      investments: [...prev.investments, newInv]
     }));
+    api.apiAddInvestment(newInv, user.id).catch(console.error);
   };
 
   const updateInvestment = (i: Investment) => {
+    if (!user) return;
     setState(prev => ({
       ...prev,
       investments: prev.investments.map(inv => inv.id === i.id ? i : inv)
     }));
+    api.apiUpdateInvestment(i).catch(console.error);
   };
 
+  // --- Settings ---
+
   const setBalanceOffset = (val: number) => {
+    if (!user) return;
     setState(prev => ({ ...prev, balanceOffset: val }));
+    api.apiUpdateBalance(val, user.id).catch(console.error);
   };
 
   const toggleDarkMode = () => {
-    setState(prev => ({ ...prev, darkMode: !prev.darkMode }));
+    if (!user) {
+      setState(prev => ({ ...prev, darkMode: !prev.darkMode }));
+      return;
+    }
+    setState(prev => {
+      const newVal = !prev.darkMode;
+      api.apiUpdateTheme(newVal, user.id).catch(console.error);
+      return { ...prev, darkMode: newVal };
+    });
   };
 
   return (

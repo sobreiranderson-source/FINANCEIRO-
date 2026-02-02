@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { getSession, initAuth, login as authLogin, logout as authLogout, register as authRegister } from '../services/auth';
 import { AppState } from '../types';
-import { loadState, saveState } from '../services/storage';
 
 interface AuthContextData {
     user: User | null;
@@ -52,7 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const hasLegacy = !!localStorage.getItem(legacyKey);
             const hasNew = !!localStorage.getItem(newKey);
 
-            if (hasLegacy && !hasNew && res.user.role === 'ADMIN') {
+            if (hasLegacy && !hasNew && (res.user.role === 'ADMIN' || res.user.role === 'admin')) {
                 // Clone data
                 const legacyData = localStorage.getItem(legacyKey);
                 if (legacyData) {
@@ -72,7 +71,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const res = await authRegister(email, pass, name);
         if (res.success) {
             // After register, we are auto logged in, update state
-            const session = getSession();
+            const session = await getSession();
             setUser(session);
         }
         return res;
@@ -87,7 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         <AuthContext.Provider value={{
             user,
             isAuthenticated: !!user,
-            isAdmin: user?.role === 'ADMIN',
+            isAdmin: user?.role === 'ADMIN' || user?.role === 'admin',
             loading,
             login,
             register,

@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { LayoutDashboard, CreditCard, Repeat, PieChart, Target, TrendingUp, Settings, FileText, Menu, X, Moon, Sun, Tag, Edit, Trash2, Layers, Shield, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, CreditCard, Repeat, PieChart, Target, TrendingUp, Settings, FileText, Menu, X, Moon, Sun, Tag, Edit, Trash2, Layers, Shield, LogOut, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Transactions from './components/Transactions';
 import Investments from './components/Investments';
 import Installments from './components/Installments';
 import Login from './components/Login';
+import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -96,66 +97,131 @@ const Reports = () => {
 };
 
 const CreditCardsManager = () => {
-    const { cards, addCard, deleteCard, transactions } = useFinance();
+    const { cards, addCard, deleteCard, updateCard, transactions } = useFinance();
+    const [isEditing, setIsEditing] = useState(false);
+    const [editId, setEditId] = useState<string | null>(null);
     const [name, setName] = useState('');
     const [limit, setLimit] = useState('');
     const [due, setDue] = useState('10');
+    const [closing, setClosing] = useState('3');
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
     const currentMonth = new Date().toISOString().slice(0, 7);
 
-    const handleAdd = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        addCard({
-            name,
-            limit: parseFloat(limit),
-            closingDay: parseInt(due) - 7, // approximate
-            dueDay: parseInt(due)
-        });
-        setName(''); setLimit('');
+        if (isEditing && editId) {
+            updateCard({
+                id: editId,
+                name,
+                limit: parseFloat(limit),
+                closingDay: parseInt(closing),
+                dueDay: parseInt(due)
+            });
+            setIsEditing(false);
+            setEditId(null);
+        } else {
+            addCard({
+                name,
+                limit: parseFloat(limit),
+                closingDay: parseInt(closing),
+                dueDay: parseInt(due)
+            });
+        }
+        setName(''); setLimit(''); setDue('10'); setClosing('3');
     };
+
+    const startEdit = (c: any) => {
+        setName(c.name);
+        setLimit(c.limit.toString());
+        setDue(c.dueDay.toString());
+        setClosing(c.closingDay.toString());
+        setIsEditing(true);
+        setEditId(c.id);
+        setSelectedCardId(null); // Close details if open
+    };
+
+    const cancelEdit = () => {
+        setIsEditing(false);
+        setEditId(null);
+        setName(''); setLimit(''); setDue('10'); setClosing('3');
+    }
 
     return (
         <div className="space-y-6">
             <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-bold mb-4 dark:text-white">Cartões de Crédito</h2>
-                <form onSubmit={handleAdd} className="flex gap-4 flex-wrap items-end mb-6">
-                    <input placeholder="Nome do Cartão" value={name} onChange={e => setName(e.target.value)} className="border rounded px-3 py-2 dark:bg-gray-800 dark:text-white" required />
-                    <input type="number" placeholder="Limite Total" value={limit} onChange={e => setLimit(e.target.value)} className="border rounded px-3 py-2 dark:bg-gray-800 dark:text-white" required />
-                    <input type="number" placeholder="Dia Vencimento" value={due} onChange={e => setDue(e.target.value)} className="border rounded px-3 py-2 dark:bg-gray-800 dark:text-white w-20" required max={31} min={1} />
-                    <button className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Adicionar</button>
+                <h2 className="text-xl font-bold mb-4 dark:text-white">{isEditing ? 'Editar Cartão' : 'Cartões de Crédito'}</h2>
+                <form onSubmit={handleSubmit} className="flex gap-4 flex-wrap items-end mb-6 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-xs dark:text-gray-400 mb-1">Nome</label>
+                        <input placeholder="Ex: Nubank" value={name} onChange={e => setName(e.target.value)} className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white" required />
+                    </div>
+                    <div className="w-32">
+                        <label className="block text-xs dark:text-gray-400 mb-1">Limite</label>
+                        <input type="number" placeholder="0.00" value={limit} onChange={e => setLimit(e.target.value)} className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white" required />
+                    </div>
+                    <div className="w-24">
+                        <label className="block text-xs dark:text-gray-400 mb-1">Fecha dia</label>
+                        <input type="number" placeholder="Dia" value={closing} onChange={e => setClosing(e.target.value)} className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white" required max={31} min={1} />
+                    </div>
+                    <div className="w-24">
+                        <label className="block text-xs dark:text-gray-400 mb-1">Vence dia</label>
+                        <input type="number" placeholder="Dia" value={due} onChange={e => setDue(e.target.value)} className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white" required max={31} min={1} />
+                    </div>
+                    <button className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 h-10">
+                        {isEditing ? 'Salvar Alterações' : 'Adicionar Cartão'}
+                    </button>
+                    {isEditing && (
+                        <button type="button" onClick={cancelEdit} className="border px-4 py-2 rounded hover:bg-gray-100 dark:text-white h-10">
+                            Cancelar
+                        </button>
+                    )}
                 </form>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {cards.map(card => {
-                        const used = transactions
-                            .filter(t => t.cardId === card.id && t.date.startsWith(currentMonth) && t.type === 'expense')
-                            .reduce((acc, t) => acc + t.amount, 0);
+                        const cardTx = transactions.filter(t => t.cardId === card.id && t.date.startsWith(currentMonth));
+                        const used = cardTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
                         const available = card.limit - used;
                         const percent = (used / card.limit) * 100;
 
                         return (
-                            <div key={card.id} className="bg-gradient-to-br from-slate-700 to-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <div className="flex justify-between items-start">
-                                        <h3 className="font-bold text-lg">{card.name}</h3>
-                                        <CreditCard className="opacity-50" />
-                                    </div>
-                                    <div className="mt-6">
-                                        <p className="text-xs text-gray-300">Fatura Atual (Est.)</p>
-                                        <p className="text-2xl font-bold">{formatCurrency(used)}</p>
-                                    </div>
-                                    <div className="mt-4">
-                                        <div className="flex justify-between text-xs mb-1 text-gray-300">
-                                            <span>Disp: {formatCurrency(available)}</span>
-                                            <span>Lim: {formatCurrency(card.limit)}</span>
+                            <div key={card.id} className="relative group">
+                                <div
+                                    onClick={() => setSelectedCardId(selectedCardId === card.id ? null : card.id)}
+                                    className="bg-gradient-to-br from-slate-700 to-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden cursor-pointer transition transform hover:scale-[1.02]"
+                                >
+                                    <div className="relative z-10">
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="font-bold text-lg">{card.name}</h3>
+                                            <CreditCard className="opacity-50" />
                                         </div>
-                                        <div className="w-full bg-white/20 rounded-full h-1.5">
-                                            <div className="bg-emerald-400 h-1.5 rounded-full" style={{ width: `${Math.min(percent, 100)}%` }}></div>
+                                        <div className="mt-6">
+                                            <p className="text-xs text-gray-300">Fatura Atual (Est.)</p>
+                                            <p className="text-2xl font-bold">{formatCurrency(used)}</p>
+                                        </div>
+                                        <div className="mt-4">
+                                            <div className="flex justify-between text-xs mb-1 text-gray-300">
+                                                <span>Disp: {formatCurrency(available)}</span>
+                                                <span>Lim: {formatCurrency(card.limit)}</span>
+                                            </div>
+                                            <div className="w-full bg-white/20 rounded-full h-1.5">
+                                                <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-400' : 'bg-emerald-400'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 flex gap-4 text-xs text-gray-400">
+                                            <span>Fecha: Dia {card.closingDay}</span>
+                                            <span>Vence: Dia {card.dueDay}</span>
                                         </div>
                                     </div>
-                                    <button onClick={() => setDeleteId(card.id)} className="absolute bottom-0 right-0 p-2 opacity-0 hover:opacity-100 transition text-red-400">
-                                        <X className="w-4 h-4" />
+                                </div>
+                                <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={(e) => { e.stopPropagation(); startEdit(card); }} className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white" title="Editar">
+                                        <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); setDeleteId(card.id); }} className="p-2 bg-red-500/20 rounded-full hover:bg-red-500/40 text-red-300" title="Excluir">
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -163,6 +229,47 @@ const CreditCardsManager = () => {
                     })}
                 </div>
             </div>
+
+            {/* Detalhes do Cartão Selecionado */}
+            {selectedCardId && (
+                <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 animate-fadeIn">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-lg dark:text-white">
+                            Gastos do Cartão: {cards.find(c => c.id === selectedCardId)?.name}
+                        </h3>
+                        <button onClick={() => setSelectedCardId(null)} className="text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead>
+                                <tr className="border-b dark:border-gray-700 text-gray-500">
+                                    <th className="pb-2">Data</th>
+                                    <th className="pb-2">Descrição</th>
+                                    <th className="pb-2">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {transactions
+                                    .filter(t => t.cardId === selectedCardId && t.date.startsWith(currentMonth) && t.type === 'expense')
+                                    .map(t => (
+                                        <tr key={t.id} className="border-b dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                            <td className="py-2 dark:text-gray-300">{formatDate(t.date)}</td>
+                                            <td className="py-2 dark:text-gray-300">{t.description}</td>
+                                            <td className="py-2 font-medium text-red-600 dark:text-red-400">{formatCurrency(t.amount)}</td>
+                                        </tr>
+                                    ))}
+                                {transactions.filter(t => t.cardId === selectedCardId && t.date.startsWith(currentMonth)).length === 0 && (
+                                    <tr>
+                                        <td colSpan={3} className="py-4 text-center text-gray-500">Nenhum gasto neste cartão este mês.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             <ConfirmModal
                 isOpen={!!deleteId}
                 message="Excluir este cartão? Histórico será mantido mas desvinculado."
@@ -471,6 +578,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
                         <SidebarItem to="/goals" icon={Target} label="Objetivos" collapsed={isCollapsed} onClick={() => setIsMobileOpen(false)} />
                         <SidebarItem to="/investments" icon={TrendingUp} label="Investimentos" collapsed={isCollapsed} onClick={() => setIsMobileOpen(false)} />
                         <SidebarItem to="/reports" icon={PieChart} label="Relatórios" collapsed={isCollapsed} onClick={() => setIsMobileOpen(false)} />
+                        <SidebarItem to="/profile" icon={User} label="Meus Dados" collapsed={isCollapsed} onClick={() => setIsMobileOpen(false)} />
 
                         {isAdmin && (
                             <>
@@ -552,6 +660,7 @@ const App = () => {
                         <Route path="/goals" element={<Layout><GoalsManager /></Layout>} />
                         <Route path="/investments" element={<Layout><Investments /></Layout>} />
                         <Route path="/reports" element={<Layout><Reports /></Layout>} />
+                        <Route path="/profile" element={<Layout><Profile /></Layout>} />
 
                         {/* Admin Route */}
                         <Route path="/admin" element={

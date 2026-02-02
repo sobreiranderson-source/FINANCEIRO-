@@ -17,9 +17,12 @@ const AdminPanel = () => {
     const [success, setSuccess] = useState('');
 
     useEffect(() => {
-        const data = getManageableUsers();
-        setUsers(data.users);
-        setAllowlist(data.allowlist);
+        const loadDocs = async () => {
+            const data = await getManageableUsers();
+            setUsers(data.users);
+            setAllowlist(data.allowlist);
+        }
+        loadDocs();
     }, [refresh]);
 
     const handleAdd = (e: React.FormEvent) => {
@@ -81,6 +84,13 @@ const AdminPanel = () => {
                 {/* Add User */}
                 <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-lg border dark:border-gray-700 mb-8">
                     <h3 className="text-lg font-semibold mb-4 dark:text-white">Autorizar Novo Acesso</h3>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 p-3 rounded mb-4 text-sm">
+                        <p>Adicione o e-mail abaixo para permitir o cadastro.</p>
+                        <p className="mt-1">
+                            O usuário deverá acessar a tela de login, clicar em <strong>"Primeiro acesso? Defina sua senha"</strong> e preencher os dados.
+                            O acesso será liberado imediatamente se a confirmação de e-mail estiver desativada no Supabase.
+                        </p>
+                    </div>
                     <form onSubmit={handleAdd} className="flex gap-4 items-end flex-wrap">
                         <div className="flex-1 min-w-[200px]">
                             <label className="block text-sm mb-1 dark:text-gray-300">E-mail</label>
