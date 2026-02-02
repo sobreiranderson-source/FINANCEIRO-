@@ -1,0 +1,5 @@
+{
+  "name": "FinControl Pro",
+  "description": "A comprehensive, professional-grade personal finance management system with data persistence, recurring expenses, investment tracking, and PDF reporting.",
+  "requestFramePermissions": []
+}
