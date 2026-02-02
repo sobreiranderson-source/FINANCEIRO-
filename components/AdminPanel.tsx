@@ -12,7 +12,8 @@ const AdminPanel = () => {
 
     // Form
     const [newEmail, setNewEmail] = useState('');
-    const [newRole, setNewRole] = useState<UserRole>('USER');
+    const [newRole, setNewRole] = useState<UserRole>('user');
+
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
@@ -110,8 +111,8 @@ const AdminPanel = () => {
                                 onChange={e => setNewRole(e.target.value as UserRole)}
                                 className="border rounded p-2 dark:bg-gray-800 dark:text-white"
                             >
-                                <option value="USER">Usuário</option>
-                                <option value="ADMIN">Administrador</option>
+                                <option value="user">Usuário</option>
+                                <option value="admin">Administrador</option>
                             </select>
                         </div>
                         <button className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">

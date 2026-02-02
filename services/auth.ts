@@ -139,7 +139,7 @@ export const addToAllowlist = async (email: string, role: string) => {
     // Client-side call: Will only work if RLS allows this user (Admin) to INSERT into allowed_emails
     const { error } = await supabase
         .from('allowed_emails')
-        .insert([{ email, role_preferred: role, status: 'active' }]);
+        .insert([{ email, role_preferred: role.toLowerCase(), status: 'active' }]);
 
     if (error) throw new Error(error.message);
 };
