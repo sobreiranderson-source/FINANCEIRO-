@@ -104,6 +104,7 @@ const CreditCardsManager = () => {
     const [limit, setLimit] = useState('');
     const [due, setDue] = useState('10');
     const [closing, setClosing] = useState('3');
+    const [manualInvoice, setManualInvoice] = useState('');
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
@@ -117,7 +118,8 @@ const CreditCardsManager = () => {
                 name,
                 limit: parseFloat(limit),
                 closingDay: parseInt(closing),
-                dueDay: parseInt(due)
+                dueDay: parseInt(due),
+                manualInvoiceValue: manualInvoice ? parseFloat(manualInvoice) : undefined
             });
             setIsEditing(false);
             setEditId(null);
@@ -126,10 +128,11 @@ const CreditCardsManager = () => {
                 name,
                 limit: parseFloat(limit),
                 closingDay: parseInt(closing),
-                dueDay: parseInt(due)
+                dueDay: parseInt(due),
+                manualInvoiceValue: manualInvoice ? parseFloat(manualInvoice) : undefined
             });
         }
-        setName(''); setLimit(''); setDue('10'); setClosing('3');
+        setName(''); setLimit(''); setDue('10'); setClosing('3'); setManualInvoice('');
     };
 
     const startEdit = (c: any) => {
@@ -137,6 +140,7 @@ const CreditCardsManager = () => {
         setLimit(c.limit.toString());
         setDue(c.dueDay.toString());
         setClosing(c.closingDay.toString());
+        setManualInvoice(c.manualInvoiceValue ? c.manualInvoiceValue.toString() : '');
         setIsEditing(true);
         setEditId(c.id);
         setSelectedCardId(null); // Close details if open
@@ -145,7 +149,9 @@ const CreditCardsManager = () => {
     const cancelEdit = () => {
         setIsEditing(false);
         setEditId(null);
-        setName(''); setLimit(''); setDue('10'); setClosing('3');
+        setIsEditing(false);
+        setEditId(null);
+        setName(''); setLimit(''); setDue('10'); setClosing('3'); setManualInvoice('');
     }
 
     return (
@@ -169,6 +175,10 @@ const CreditCardsManager = () => {
                         <label className="block text-xs dark:text-gray-400 mb-1">Vence dia</label>
                         <input type="number" placeholder="Dia" value={due} onChange={e => setDue(e.target.value)} className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white" required max={31} min={1} />
                     </div>
+                    <div className="w-32">
+                        <label className="block text-xs dark:text-gray-400 mb-1">Fatura Manual</label>
+                        <input type="number" step="0.01" placeholder="Opcional" value={manualInvoice} onChange={e => setManualInvoice(e.target.value)} className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white" />
+                    </div>
                     <button className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 h-10">
                         {isEditing ? 'Salvar Alterações' : 'Adicionar Cartão'}
                     </button>
@@ -182,7 +192,8 @@ const CreditCardsManager = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {cards.map(card => {
                         const cardTx = transactions.filter(t => t.cardId === card.id && t.date.startsWith(currentMonth));
-                        const used = cardTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+                        const calculatedUsed = cardTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+                        const used = card.manualInvoiceValue !== undefined ? card.manualInvoiceValue : calculatedUsed;
                         const available = card.limit - used;
                         const percent = (used / card.limit) * 100;
 
@@ -198,7 +209,9 @@ const CreditCardsManager = () => {
                                             <CreditCard className="opacity-50" />
                                         </div>
                                         <div className="mt-6">
-                                            <p className="text-xs text-gray-300">Fatura Atual (Est.)</p>
+                                            <p className="text-xs text-gray-300">
+                                                Fatura Atual {card.manualInvoiceValue !== undefined ? '(Manual)' : '(Est.)'}
+                                            </p>
                                             <p className="text-2xl font-bold">{formatCurrency(used)}</p>
                                         </div>
                                         <div className="mt-4">

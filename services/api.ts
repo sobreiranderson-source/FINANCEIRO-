@@ -48,7 +48,8 @@ const mapCardFromDB = (c: any): CreditCard => ({
     name: c.name,
     limit: Number(c.credit_limit),
     closingDay: c.closing_day,
-    dueDay: c.due_day
+    dueDay: c.due_day,
+    manualInvoiceValue: c.manual_invoice_value ? Number(c.manual_invoice_value) : undefined
 });
 
 const mapRecurringFromDB = (r: any): RecurringExpense => ({
@@ -198,7 +199,8 @@ export const apiAddCard = async (c: CreditCard, userId: string) => {
         name: c.name,
         credit_limit: c.limit,
         closing_day: c.closingDay,
-        due_day: c.dueDay
+        due_day: c.dueDay,
+        manual_invoice_value: c.manualInvoiceValue || null
     }]);
     if (error) throw error;
 };
@@ -213,7 +215,8 @@ export const apiUpdateCard = async (c: CreditCard) => {
         name: c.name,
         credit_limit: c.limit,
         closing_day: c.closingDay,
-        due_day: c.dueDay
+        due_day: c.dueDay,
+        manual_invoice_value: c.manualInvoiceValue === undefined ? null : c.manualInvoiceValue
     }).eq('id', c.id);
     if (error) throw error;
 };

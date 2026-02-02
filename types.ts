@@ -13,6 +13,7 @@ export interface CreditCard {
   limit: number;
   closingDay: number;
   dueDay: number;
+  manualInvoiceValue?: number; // Optional manual override
 }
 
 export interface Transaction {

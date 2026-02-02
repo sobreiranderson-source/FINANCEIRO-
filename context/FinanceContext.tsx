@@ -469,7 +469,7 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
       ...state,
       addTransaction, updateTransaction, deleteTransaction,
       addCategory, updateCategory, deleteCategory,
-      addCard, deleteCard,
+      addCard, deleteCard, updateCard,
       addRecurring, deleteRecurring,
       addInstallment, updateInstallment, deleteInstallment,
       payNextInstallment, undoLastInstallment,
