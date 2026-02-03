@@ -37,6 +37,7 @@ interface FinanceContextType extends AppState {
 
   setBalanceOffset: (val: number) => void;
   toggleDarkMode: () => void;
+  setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -61,7 +62,33 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => {
     if (user) {
       api.fetchInitialState(user.id).then(loaded => {
-        setState(loaded);
+        // --- CLEANUP DUPLICATES (Structural Healing) ---
+        const cleanedTransactions = loaded.transactions.reduce((acc: Transaction[], current) => {
+          const currentMonth = current.date.slice(0, 7);
+
+          // Find potential duplicate (by ID or Fingerprint)
+          const isDuplicate = acc.find(t => {
+            const tMonth = t.date.slice(0, 7);
+            if (tMonth !== currentMonth) return false;
+
+            const idMatch = current.recurringExpenseId && t.recurringExpenseId === current.recurringExpenseId;
+            const fingerprintMatch =
+              t.description.includes(current.description.replace('(Fixo) ', '')) &&
+              Math.abs(t.amount - current.amount) < 0.01;
+
+            return idMatch || fingerprintMatch;
+          });
+
+          if (isDuplicate) {
+            // Delete from DB
+            api.apiDeleteTransaction(current.id).catch(console.error);
+            return acc;
+          }
+
+          return [...acc, current];
+        }, []);
+
+        setState({ ...loaded, transactions: cleanedTransactions });
         if (loaded.darkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
       });
@@ -90,28 +117,7 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
     }
   }, [state.darkMode]);
 
-  // Recurring Checker Effect
-  useEffect(() => {
-    if (!user) return;
-    checkRecurringExpenses(
-      state.recurringExpenses,
-      (tx) => addTransaction(tx),
-      (id, month) => {
-        setState(prev => ({
-          ...prev,
-          recurringExpenses: prev.recurringExpenses.map(r =>
-            r.id === id ? { ...r, lastGeneratedMonth: month } : r
-          )
-        }));
-        // Note: We don't save 'lastGeneratedMonth' to DB explicitly in this simplified version
-        // unless we map it. Typically recurring generation is client-side automation.
-        // Ideally, we should trust the generated transactions in DB.
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.recurringExpenses, user]);
-
-  // Installments Checker Effect
+  // Installments Checker Effect (Keeping for now, but strictly monitored)
   useEffect(() => {
     if (!user) return;
     if (state.installments.length > 0) {
@@ -475,7 +481,7 @@ export const FinanceProvider = ({ children }: { children?: ReactNode }) => {
       payNextInstallment, undoLastInstallment,
       addGoal, updateGoal, deleteGoal,
       addInvestment, updateInvestment,
-      setBalanceOffset, toggleDarkMode
+      setBalanceOffset, toggleDarkMode, setState
     }}>
       {children}
     </FinanceContext.Provider>

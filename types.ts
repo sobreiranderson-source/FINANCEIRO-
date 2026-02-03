@@ -27,6 +27,7 @@ export interface Transaction {
   goalId?: string; // If linked to an objective (income/contribution)
   installmentId?: string; // Link to the parent installment plan
   isRecurring?: boolean;
+  recurringExpenseId?: string; // Link to the source recurring expense
 }
 
 export interface RecurringExpense {

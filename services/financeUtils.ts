@@ -4,7 +4,7 @@ export const generateUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
@@ -37,6 +37,7 @@ export const calculateCardUsage = (cardId: string, transactions: Transaction[], 
 
 export const checkRecurringExpenses = (
   expenses: RecurringExpense[],
+  transactions: Transaction[],
   addTransaction: (t: Omit<Transaction, 'id'>) => void,
   updateExpenseLastMonth: (id: string, month: string) => void
 ) => {
@@ -46,24 +47,46 @@ export const checkRecurringExpenses = (
 
   expenses.forEach(exp => {
     if (!exp.active) return;
-    
-    // If we haven't generated for this month yet
-    if (exp.lastGeneratedMonth !== currentMonthKey) {
-      // And we passed the due day
-      if (currentDay >= exp.dueDay) {
-        // Generate Transaction
-        const newTx: Omit<Transaction, 'id'> = {
-          description: `(Fixo) ${exp.name}`,
-          amount: exp.amount,
-          type: 'expense',
-          date: today.toISOString().split('T')[0],
-          categoryId: exp.categoryId,
-          isRecurring: true
-        };
-        
-        addTransaction(newTx);
-        updateExpenseLastMonth(exp.id, currentMonthKey);
-      }
+
+    // Performance Optimization: Check transient memory
+    if (exp.lastGeneratedMonth === currentMonthKey) return;
+
+    // --- STRUCTURAL PROTECTION (Double Layer) ---
+    const alreadyExists = transactions.some(t => {
+      const txMonth = t.date.slice(0, 7);
+
+      // Layer 1: Match by ID link
+      const idMatch = t.recurringExpenseId === exp.id;
+
+      // Layer 2: Fingerprint matching (Description + Amount + Month)
+      // This protects against duplicates even if the SQL column for recurringExpenseId is missing
+      const fingerprintMatch =
+        t.description.includes(exp.name) &&
+        Math.abs(t.amount - exp.amount) < 0.01 &&
+        txMonth === currentMonthKey;
+
+      return (idMatch || fingerprintMatch) && txMonth === currentMonthKey;
+    });
+
+    if (alreadyExists) {
+      updateExpenseLastMonth(exp.id, currentMonthKey);
+      return;
+    }
+
+    // --- EXECUTION ---
+    if (currentDay >= exp.dueDay) {
+      const newTx: Omit<Transaction, 'id'> = {
+        description: `(Fixo) ${exp.name}`,
+        amount: exp.amount,
+        type: 'expense',
+        date: today.toISOString().split('T')[0],
+        categoryId: exp.categoryId,
+        isRecurring: true,
+        recurringExpenseId: exp.id
+      };
+
+      addTransaction(newTx);
+      updateExpenseLastMonth(exp.id, currentMonthKey);
     }
   });
 };
@@ -88,10 +111,10 @@ export const checkInstallments = (
 
     // Check completion status
     if (paidCount >= inst.totalInstallments && inst.status !== 'completed') {
-       updateInstallment({ ...inst, status: 'completed' });
-       return;
+      updateInstallment({ ...inst, status: 'completed' });
+      return;
     }
-    
+
     // If already completed, stop
     if (inst.status === 'completed') return;
 
@@ -100,26 +123,26 @@ export const checkInstallments = (
       // Logic check: only generate if we haven't reached total installments
       if (paidCount < inst.totalInstallments) {
         const currentNumber = paidCount + 1;
-        
+
         const newTx: Omit<Transaction, 'id'> = {
-            description: `${inst.description} (${currentNumber}/${inst.totalInstallments})`,
-            amount: inst.installmentAmount,
-            type: 'expense',
-            date: today.toISOString().split('T')[0],
-            categoryId: inst.categoryId,
-            cardId: inst.cardId,
-            installmentId: inst.id
+          description: `${inst.description} (${currentNumber}/${inst.totalInstallments})`,
+          amount: inst.installmentAmount,
+          type: 'expense',
+          date: today.toISOString().split('T')[0],
+          categoryId: inst.categoryId,
+          cardId: inst.cardId,
+          installmentId: inst.id
         };
 
         addTransaction(newTx);
-        
+
         // Update installment last generated month
         // Also check if this was the last one to update status immediately
         const newStatus = currentNumber >= inst.totalInstallments ? 'completed' : 'active';
-        updateInstallment({ 
-            ...inst, 
-            status: newStatus,
-            lastGeneratedMonth: currentMonthKey 
+        updateInstallment({
+          ...inst,
+          status: newStatus,
+          lastGeneratedMonth: currentMonthKey
         });
       }
     }

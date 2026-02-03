@@ -12,7 +12,7 @@ import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatCurrency, formatDate } from './services/financeUtils';
+import { formatCurrency, formatDate, checkRecurringExpenses } from './services/financeUtils';
 import { Category } from './types';
 
 // --- Shared Modal ---
@@ -294,9 +294,34 @@ const CreditCardsManager = () => {
 }
 
 const RecurringManager = () => {
-    const { recurringExpenses, addRecurring, deleteRecurring, categories } = useFinance();
+    const { recurringExpenses, transactions, addTransaction, addRecurring, deleteRecurring, categories, setState } = useFinance();
     const [form, setForm] = useState({ name: '', amount: '', dueDay: '5', categoryId: '' });
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const activeExpenses = recurringExpenses.filter(r => r.active);
+    const totalMonthly = activeExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+
+    const handleGenerate = () => {
+        setIsGenerating(true);
+        // We use a small timeout to simulate processing and give visual feedback
+        setTimeout(() => {
+            checkRecurringExpenses(
+                recurringExpenses,
+                transactions,
+                (tx) => addTransaction(tx),
+                (id, month) => {
+                    setState((prev: any) => ({
+                        ...prev,
+                        recurringExpenses: prev.recurringExpenses.map((r: any) =>
+                            r.id === id ? { ...r, lastGeneratedMonth: month } : r
+                        )
+                    }));
+                }
+            );
+            setIsGenerating(false);
+        }, 500);
+    }
 
     const handleAdd = (e: React.FormEvent) => {
         e.preventDefault();
@@ -311,33 +336,59 @@ const RecurringManager = () => {
     }
 
     return (
-        <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">Gastos Fixos / Recorrentes</h2>
-            <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                <input placeholder="Nome (ex: Aluguel)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required />
-                <input type="number" placeholder="Valor" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required />
-                <select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required>
-                    <option value="">Categoria</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <input type="number" placeholder="Dia Venc." value={form.dueDay} onChange={e => setForm({ ...form, dueDay: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required max={31} min={1} />
-                <button className="bg-indigo-600 text-white rounded hover:bg-indigo-700">Adicionar</button>
-            </form>
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:col-span-1 flex flex-col justify-between">
+                    <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-1">Total de Gastos Fixos Mensais</p>
+                        <h3 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(totalMonthly)}</h3>
+                        <p className="text-xs text-gray-400 mt-2">Soma de todos os gastos recorrentes ativos.</p>
+                    </div>
+                    <button
+                        onClick={handleGenerate}
+                        disabled={isGenerating}
+                        className={`mt-4 w-full py-2 px-4 rounded-lg font-medium transition-all ${isGenerating ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400'}`}
+                    >
+                        {isGenerating ? 'Processando...' : 'Lançar Gastos do Mês'}
+                    </button>
+                </div>
 
-            <ul className="space-y-2">
-                {recurringExpenses.map(r => (
-                    <li key={r.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700">
-                        <div>
-                            <span className="font-semibold dark:text-white">{r.name}</span>
-                            <span className="text-sm text-gray-500 ml-2">Dia {r.dueDay}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <span className="font-bold text-gray-700 dark:text-gray-300">{formatCurrency(r.amount)}</span>
-                            <button onClick={() => setDeleteId(r.id)} className="text-red-500 hover:text-red-700"><X className="w-4 h-4" /></button>
-                        </div>
-                    </li>
-                ))}
-            </ul>
+                <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:col-span-2">
+                    <h2 className="text-xl font-bold mb-4 dark:text-white">Gerenciar Gastos Fixos</h2>
+                    <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <input placeholder="Nome (ex: Aluguel)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required />
+                        <input type="number" placeholder="Valor" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required />
+                        <select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required>
+                            <option value="">Categoria</option>
+                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <input type="number" placeholder="Dia Venc." value={form.dueDay} onChange={e => setForm({ ...form, dueDay: e.target.value })} className="border rounded p-2 dark:bg-gray-800 dark:text-white" required max={31} min={1} />
+                        <button className="bg-indigo-600 text-white rounded hover:bg-indigo-700 py-2 sm:col-span-2 lg:col-span-4 font-medium transition-colors">Adicionar Gasto Fixo</button>
+                    </form>
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-bold mb-4 dark:text-white">Listagem de Recorrências</h2>
+                <ul className="space-y-2">
+                    {recurringExpenses.length === 0 && (
+                        <p className="text-center py-8 text-gray-500">Nenhum gasto fixo cadastrado ainda.</p>
+                    )}
+                    {recurringExpenses.map(r => (
+                        <li key={r.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-900 transition-colors">
+                            <div>
+                                <span className="font-semibold dark:text-white">{r.name}</span>
+                                <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded ml-2">Dia {r.dueDay}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="font-bold text-gray-700 dark:text-gray-300">{formatCurrency(r.amount)}</span>
+                                <button onClick={() => setDeleteId(r.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded transition-colors" title="Excluir"><X className="w-4 h-4" /></button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
             <ConfirmModal
                 isOpen={!!deleteId}
                 message="Parar esta recorrência?"

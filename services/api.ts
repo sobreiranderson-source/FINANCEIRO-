@@ -17,9 +17,7 @@ const mapTransactionFromDB = (t: any): Transaction => ({
     cardId: t.card_id || undefined,
     goalId: t.goal_id || undefined,
     installmentId: t.installment_purchase_id || undefined,
-    // isRecurring logic is usually derived or stored if specifically flagged. 
-    // Our schema doesn't have is_recurring on transactions table explicitly, 
-    // but fixed_expense_instance links to it. For now, we keep it simple.
+    recurringExpenseId: t.fixed_expense_id || undefined,
     isRecurring: !!t.fixed_expense_id
 });
 
@@ -34,7 +32,7 @@ const mapTransactionToDB = (t: Transaction, userId: string) => ({
     card_id: t.cardId || null,
     goal_id: t.goalId || null,
     installment_purchase_id: t.installmentId || null,
-    // Note: installment_number is not in Transaction type yet, but in DB
+    fixed_expense_id: t.recurringExpenseId || null
 });
 
 const mapCategoryFromDB = (c: any): Category => ({
