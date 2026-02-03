@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+// Updated version to force Vercel redeploy
 import { useFinance } from '../context/FinanceContext';
 import { formatCurrency, formatDate } from '../services/financeUtils';
 import { Trash2, Edit2, Filter, Plus } from 'lucide-react';
