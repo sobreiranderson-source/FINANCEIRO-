@@ -374,18 +374,33 @@ const RecurringManager = () => {
                     {recurringExpenses.length === 0 && (
                         <p className="text-center py-8 text-gray-500">Nenhum gasto fixo cadastrado ainda.</p>
                     )}
-                    {recurringExpenses.map(r => (
-                        <li key={r.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-900 transition-colors">
-                            <div>
-                                <span className="font-semibold dark:text-white">{r.name}</span>
-                                <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded ml-2">Dia {r.dueDay}</span>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="font-bold text-gray-700 dark:text-gray-300">{formatCurrency(r.amount)}</span>
-                                <button onClick={() => setDeleteId(r.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded transition-colors" title="Excluir"><X className="w-4 h-4" /></button>
-                            </div>
-                        </li>
-                    ))}
+                    {recurringExpenses.map(r => {
+                        const paid = transactions.some(t =>
+                            t.recurringExpenseId === r.id &&
+                            t.date.startsWith(new Date().toISOString().slice(0, 7))
+                        );
+                        return (
+                            <li key={r.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-900 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold dark:text-white">{r.name}</span>
+                                            {paid ? (
+                                                <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Pago</span>
+                                            ) : (
+                                                <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Pendente</span>
+                                            )}
+                                        </div>
+                                        <span className="text-[10px] text-gray-500 uppercase font-semibold">Vencimento: Dia {r.dueDay}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className="font-bold text-gray-700 dark:text-gray-300">{formatCurrency(r.amount)}</span>
+                                    <button onClick={() => setDeleteId(r.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Excluir"><X className="w-4 h-4" /></button>
+                                </div>
+                            </li>
+                        );
+                    })}
                 </ul>
             </div>
 

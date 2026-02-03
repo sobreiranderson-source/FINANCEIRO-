@@ -5,11 +5,11 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { ArrowUpCircle, ArrowDownCircle, Wallet, AlertCircle } from 'lucide-react';
 
 const Dashboard = () => {
-  const { 
-    transactions, balanceOffset, categories, setBalanceOffset, 
-    recurringExpenses, goals 
+  const {
+    transactions, balanceOffset, categories, setBalanceOffset,
+    recurringExpenses, goals
   } = useFinance();
-  
+
   const [isEditingBalance, setIsEditingBalance] = useState(false);
   const [tempBalance, setTempBalance] = useState(balanceOffset.toString());
 
@@ -27,7 +27,7 @@ const Dashboard = () => {
   // Total absolute balance calculation
   const allTimeIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const allTimeExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-  
+
   // Logic: Current Balance = Offset (Equity) + All Time P&L
   const currentBalance = balanceOffset + allTimeIncome - allTimeExpense;
 
@@ -41,14 +41,14 @@ const Dashboard = () => {
 
     const netHistory = allTimeIncome - allTimeExpense;
     const newOffset = targetBalance - netHistory;
-    
+
     setBalanceOffset(newOffset);
     setIsEditingBalance(false);
   };
 
   const startEditing = () => {
     // When editing, we show the current RESULTING balance, not the internal offset
-    setTempBalance(currentBalance.toFixed(2)); 
+    setTempBalance(currentBalance.toFixed(2));
     setIsEditingBalance(true);
   }
 
@@ -63,9 +63,19 @@ const Dashboard = () => {
   // Alerts
   const nearDueRecurrings = recurringExpenses.filter(r => {
     if (!r.active) return false;
+
+    // Check if already paid this month (Structural check)
+    const isPaid = transactions.some(t =>
+      t.recurringExpenseId === r.id &&
+      t.date.startsWith(currentMonthKey)
+    );
+    if (isPaid) return false;
+
     const today = new Date().getDate();
     const diff = r.dueDay - today;
-    return diff >= 0 && diff <= 5 && r.lastGeneratedMonth !== currentMonthKey;
+
+    // Show alert if due in next 5 days or if already overdue
+    return diff <= 5 && r.lastGeneratedMonth !== currentMonthKey;
   });
 
   return (
@@ -81,10 +91,10 @@ const Dashboard = () => {
           <div className="flex items-end space-x-2">
             {isEditingBalance ? (
               <div className="flex items-center space-x-2">
-                <input 
+                <input
                   type="number"
-                  step="0.01" 
-                  value={tempBalance} 
+                  step="0.01"
+                  value={tempBalance}
                   onChange={(e) => setTempBalance(e.target.value)}
                   className="w-32 px-2 py-1 border rounded dark:bg-gray-800 dark:text-white"
                   autoFocus
@@ -92,7 +102,7 @@ const Dashboard = () => {
                 <button onClick={handleSaveBalance} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600">OK</button>
               </div>
             ) : (
-              <div 
+              <div
                 className="text-2xl font-bold text-gray-900 dark:text-white cursor-pointer hover:text-indigo-600 transition"
                 title="Clique para editar manualmente o saldo"
                 onClick={startEditing}
@@ -147,33 +157,33 @@ const Dashboard = () => {
         <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-6 text-gray-800 dark:text-gray-200">Gastos por Categoria (Mês)</h3>
           <div className="h-64">
-             {expenseByCategory.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={expenseByCategory}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {expenseByCategory.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                        contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff' }}
-                        formatter={(value: number) => formatCurrency(value)}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-             ) : (
-                <div className="h-full flex items-center justify-center text-gray-400">
-                    Sem dados de gastos este mês
-                </div>
-             )}
+            {expenseByCategory.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={expenseByCategory}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {expenseByCategory.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400">
+                Sem dados de gastos este mês
+              </div>
+            )}
           </div>
         </div>
 
@@ -181,30 +191,30 @@ const Dashboard = () => {
         <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[350px]">
           <h3 className="text-lg font-semibold mb-6 text-gray-800 dark:text-gray-200">Objetivos Financeiros</h3>
           {goals.length === 0 ? (
-             <p className="text-gray-400 text-center py-10">Nenhum objetivo cadastrado.</p>
+            <p className="text-gray-400 text-center py-10">Nenhum objetivo cadastrado.</p>
           ) : (
-             <div className="space-y-4">
-               {goals.map(goal => {
-                 const progress = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
-                 const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
-                 return (
-                   <div key={goal.id}>
-                     <div className="flex justify-between text-sm mb-1">
-                       <span className="font-medium dark:text-gray-300">{goal.name}</span>
-                       <div className="text-right">
-                          <span className="text-gray-500 dark:text-gray-400 block">{formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}</span>
-                       </div>
-                     </div>
-                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                       <div 
+            <div className="space-y-4">
+              {goals.map(goal => {
+                const progress = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
+                const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
+                return (
+                  <div key={goal.id}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium dark:text-gray-300">{goal.name}</span>
+                      <div className="text-right">
+                        <span className="text-gray-500 dark:text-gray-400 block">{formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div
                         className={`h-2.5 rounded-full transition-all duration-500 ${progress >= 100 ? 'bg-emerald-500' : 'bg-indigo-600'}`}
                         style={{ width: `${progress}%` }}
-                       ></div>
-                     </div>
-                   </div>
-                 )
-               })}
-             </div>
+                      ></div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </div>
